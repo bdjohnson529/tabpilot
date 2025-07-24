@@ -1,14 +1,18 @@
 chrome.runtime.onStartup.addListener(() => sendTabsToPython());
 chrome.runtime.onInstalled.addListener(() => sendTabsToPython());
 
-function sendTabsToPython() {
-  chrome.tabs.query({}, function(tabs) {
-    const tabData = tabs.map(tab => ({
-      title: tab.title,
-      url: tab.url
-    }));
+chrome.action.onClicked.addListener((tab) => {
+  try {
+    console.log("Extension clicked, opening side panel...");
+    chrome.sidePanel.open({ windowId: tab.windowId });
+    console.log("Side panel opened successfully");
+  } catch (error) {
+    console.error("Failed to open side panel:", error);
+  }
+});
 
-    console.log(tabData);
+function sendTabsToPython() {
+
     /*
     fetch("http://localhost:5000/tabs", {
       method: "POST",
@@ -16,5 +20,4 @@ function sendTabsToPython() {
       body: JSON.stringify({ tabs: tabData })
     });
     */
-  });
-}
+};

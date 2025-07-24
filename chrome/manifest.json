@@ -4,10 +4,12 @@
   "version": "1.0",
   "manifest_version": 3,
   "action": {
-    "default_popup": "hello.html",
-    "default_icon": "icon.png"
+    "default_title": "Open TabPilot Side Panel"
   },
-  "permissions": ["tabs", "scripting", "activeTab"],
+  "permissions": ["tabs", "scripting", "activeTab", "sidePanel"],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "host_permissions": ["http://localhost:5001/*"],
   "background": {
     "service_worker": "background.js"
