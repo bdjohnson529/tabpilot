@@ -1,25 +1,59 @@
 console.log("TabPilot sidepanel loaded!")
 
+let savedApiKey = null;
+
 // Handle provider selection
 document.getElementById("provider").addEventListener("change", (e) => {
   const apiKeySection = document.getElementById("apiKeySection");
   if (e.target.value === "claude") {
     apiKeySection.style.display = "block";
+    updateApiKeyDisplay();
   } else {
     apiKeySection.style.display = "none";
   }
 });
 
+// Update API key display based on whether one is saved
+function updateApiKeyDisplay() {
+  const apiKeyStatus = document.getElementById("apiKeyStatus");
+  const apiKeyInput = document.getElementById("apiKeyInput");
+  
+  if (savedApiKey) {
+    apiKeyStatus.style.display = "flex";
+    apiKeyInput.style.display = "none";
+  } else {
+    apiKeyStatus.style.display = "none";
+    apiKeyInput.style.display = "block";
+  }
+}
+
 // Load saved API key
 chrome.storage.local.get(['claudeApiKey'], (result) => {
   if (result.claudeApiKey) {
+    savedApiKey = result.claudeApiKey;
     document.getElementById("apiKey").value = result.claudeApiKey;
   }
+  updateApiKeyDisplay();
 });
 
 // Save API key when changed
 document.getElementById("apiKey").addEventListener("input", (e) => {
-  chrome.storage.local.set({ claudeApiKey: e.target.value });
+  const newKey = e.target.value;
+  if (newKey) {
+    chrome.storage.local.set({ claudeApiKey: newKey });
+    savedApiKey = newKey;
+    updateApiKeyDisplay();
+  }
+});
+
+// Handle change API key button
+document.getElementById("changeApiKey").addEventListener("click", () => {
+  const apiKeyStatus = document.getElementById("apiKeyStatus");
+  const apiKeyInput = document.getElementById("apiKeyInput");
+  
+  apiKeyStatus.style.display = "none";
+  apiKeyInput.style.display = "block";
+  document.getElementById("apiKey").focus();
 });
 
 async function callOllama(tabData) {
@@ -88,10 +122,21 @@ ${tabData.map(tab => `- ${tab.title}: ${tab.url}`).join('\n')}`
 
 document.getElementById("classify").addEventListener("click", async () => {
   const outputElement = document.getElementById("output");
+  const timerElement = document.getElementById("timer");
+  const startTime = Date.now();
+  let timerInterval;
   
   // Show loading state
   outputElement.innerText = "Analyzing all tabs...";
   outputElement.className = "loading";
+  timerElement.style.display = "block";
+  
+  // Start continuous timer
+  timerInterval = setInterval(() => {
+    const currentTime = Date.now();
+    const elapsedTime = ((currentTime - startTime) / 1000).toFixed(1);
+    timerElement.innerHTML = `<span class="timer-text">${elapsedTime}s elapsed...</span>`;
+  }, 100); // Update every 100ms
   
   try {
     // Get all tabs
@@ -116,7 +161,7 @@ document.getElementById("classify").addEventListener("click", async () => {
     let data;
 
     if (provider === "claude") {
-      const apiKey = document.getElementById("apiKey").value;
+      const apiKey = savedApiKey || document.getElementById("apiKey").value;
       if (!apiKey) {
         throw new Error("Please enter your Claude API key");
       }
@@ -124,10 +169,22 @@ document.getElementById("classify").addEventListener("click", async () => {
     } else {
       data = await callOllama(regularTabs);
     }
+    
+    // Stop continuous timer
+    clearInterval(timerInterval);
+    
+    // Calculate elapsed time
+    const endTime = Date.now();
+    const elapsedTime = ((endTime - startTime) / 1000).toFixed(2);
+    
     console.log("Classification result:", data);
 
     // Remove loading state and show results
     outputElement.className = "";
+    
+    // Show final timer
+    timerElement.innerHTML = `<span class="timer-text">Completed in ${elapsedTime}s using ${provider === "claude" ? "Claude API" : "Ollama"}</span>`;
+    timerElement.style.display = "block";
     
     // Render as markdown
     if (data.response) {
@@ -137,8 +194,12 @@ document.getElementById("classify").addEventListener("click", async () => {
     }
 
   } catch (error) {
+    // Stop continuous timer
+    clearInterval(timerInterval);
+    
     console.error("Error:", error);
     outputElement.className = "";
+    timerElement.style.display = "none";
     outputElement.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
   }
 });

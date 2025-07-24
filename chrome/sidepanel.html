@@ -16,10 +16,17 @@
       </select>
     </div>
     <div class="api-key-section" id="apiKeySection" style="display: none;">
-      <label for="apiKey">Claude API Key:</label>
-      <input type="password" id="apiKey" placeholder="Enter your Claude API key">
+      <div id="apiKeyStatus" style="display: none;">
+        <span>API Key saved</span>
+        <button type="button" id="changeApiKey" class="small-button">Change Key</button>
+      </div>
+      <div id="apiKeyInput">
+        <label for="apiKey">Claude API Key:</label>
+        <input type="password" id="apiKey" placeholder="Enter your Claude API key">
+      </div>
     </div>
     <button id="classify">Classify All Tabs</button>
+    <div id="timer" style="display: none;"></div>
     <div id="output">Click the button to analyze your tabs...</div>
   </div>
   <script src="js/popup.js"></script>

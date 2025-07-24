@@ -123,3 +123,47 @@
       font-size: 14px;
       box-sizing: border-box;
     }
+
+    #apiKeyStatus {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #e8f5e8;
+      border: 1px solid #c3e6c3;
+      border-radius: 4px;
+      color: #2e7d32;
+      font-size: 14px;
+    }
+
+    .small-button {
+      background: #f8f9fa;
+      color: #666;
+      border: 1px solid #ddd;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      width: auto;
+      margin: 0;
+    }
+
+    .small-button:hover {
+      background: #e9ecef;
+    }
+
+    /* Timer styling */
+    #timer {
+      margin-bottom: 16px;
+      padding: 8px 12px;
+      background: #f0f7ff;
+      border: 1px solid #b3d9ff;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .timer-text {
+      color: #0d47a1;
+      font-size: 13px;
+      font-weight: 500;
+    }
