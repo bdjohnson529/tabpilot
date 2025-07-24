@@ -8,6 +8,7 @@ const elements = {
   apiKeyInput: document.getElementById("apiKeyInput"),
   apiKey: document.getElementById("apiKey"),
   changeApiKey: document.getElementById("changeApiKey"),
+  listOldTabs: document.getElementById("listOldTabs"),
   classify: document.getElementById("classify"),
   timer: document.getElementById("timer"),
   output: document.getElementById("output")
@@ -75,20 +76,20 @@ Tabs to classify:
 ${tabData.map(tab => `- ${tab.title}: ${tab.url}`).join('\n')}`;
 
 // API calls
-const callOllama = async (tabData) => {
+const callOllama = async (tabData, customPrompt = null) => {
   const response = await fetch("http://localhost:5001/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gemma3",
-      prompt: createPrompt(tabData),
+      prompt: customPrompt || createPrompt(tabData),
       stream: false
     })
   });
   return await response.json();
 };
 
-const callClaude = async (tabData, apiKey) => {
+const callClaude = async (tabData, apiKey, customPrompt = null) => {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -100,7 +101,7 @@ const callClaude = async (tabData, apiKey) => {
     body: JSON.stringify({
       model: "claude-3-5-sonnet-20241022",
       max_tokens: 4000,
-      messages: [{ role: "user", content: createPrompt(tabData) }]
+      messages: [{ role: "user", content: customPrompt || createPrompt(tabData) }]
     })
   });
   
@@ -133,6 +134,67 @@ const createTimer = (startTime) => {
   
   return { start, stop, clear };
 };
+
+// List old tabs function
+elements.listOldTabs.addEventListener("click", async () => {
+  const startTime = Date.now();
+  const timer = createTimer(startTime);
+  
+  elements.output.innerText = "Finding old tabs...";
+  elements.output.className = "loading";
+  timer.start();
+  
+  try {
+    const tabs = await chrome.tabs.query({});
+    const currentTime = Date.now();
+    const oldTabs = tabs.filter(tab => 
+      !tab.url.startsWith('chrome://') && 
+      !tab.url.startsWith('chrome-extension://') && 
+      (currentTime - tab.lastAccessed) > 600000 // 10 minutes in ms
+    ).map(tab => ({ title: tab.title, url: tab.url }));
+    
+    if (!oldTabs.length) {
+      timer.clear();
+      elements.output.className = "";
+      elements.output.innerHTML = '<p>No tabs have been open for more than 10 minutes.</p>';
+      return;
+    }
+    
+    elements.output.innerText = `Grouping ${oldTabs.length} old tabs...`;
+    
+    const provider = elements.provider.value;
+    const prompt = `Group these browser tabs that have been open for more than 10 minutes into coherent thematic groups. Return the result as markdown with headers for each group and bullet points for the tabs.
+
+Format like this:
+## Work Projects
+- Tab Title 1 - URL1
+- Tab Title 2 - URL2
+
+## Research
+- Tab Title 3 - URL3
+
+Tabs to group:
+${oldTabs.map(tab => `- ${tab.title}: ${tab.url}`).join('\n')}`;
+    
+    let data;
+    if (provider === "claude") {
+      const apiKey = savedApiKey || elements.apiKey.value;
+      if (!apiKey) throw new Error("Please enter your Claude API key");
+      data = await callClaude(oldTabs, apiKey, prompt);
+    } else {
+      data = await callOllama(oldTabs, prompt);
+    }
+    
+    elements.output.className = "";
+    timer.stop(provider);
+    elements.output.innerHTML = data.response ? marked.parse(data.response) : `<p style="color: red;">Error: ${data.error}</p>`;
+    
+  } catch (error) {
+    timer.clear();
+    elements.output.className = "";
+    elements.output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+  }
+});
 
 // Main classification function
 elements.classify.addEventListener("click", async () => {
