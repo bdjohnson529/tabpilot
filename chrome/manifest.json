@@ -10,7 +10,7 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "host_permissions": ["http://localhost:5001/*", "https://api.anthropic.com/*"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "js/background.js"
   }

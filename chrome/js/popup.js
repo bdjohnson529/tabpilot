@@ -8,7 +8,7 @@ const elements = {
   apiKeyInput: document.getElementById("apiKeyInput"),
   apiKey: document.getElementById("apiKey"),
   changeApiKey: document.getElementById("changeApiKey"),
-  listOldTabs: document.getElementById("listOldTabs"),
+  manageOldTabs: document.getElementById("manageOldTabs"),
   classify: document.getElementById("classify"),
   timer: document.getElementById("timer"),
   output: document.getElementById("output")
@@ -135,66 +135,165 @@ const createTimer = (startTime) => {
   return { start, stop, clear };
 };
 
-// List old tabs function
-elements.listOldTabs.addEventListener("click", async () => {
-  const startTime = Date.now();
-  const timer = createTimer(startTime);
-  
-  elements.output.innerText = "Finding old tabs...";
-  elements.output.className = "loading";
-  timer.start();
-  
+
+// Tab cycling state
+let currentTabIndex = 0;
+let oldTabsList = [];
+let currentWindowId = null;
+
+// Manage old tabs function with cycling
+elements.manageOldTabs.addEventListener("click", async () => {
   try {
     const tabs = await chrome.tabs.query({});
     const currentTime = Date.now();
-    const oldTabs = tabs.filter(tab => 
+    const currentWindow = await chrome.windows.getCurrent();
+    currentWindowId = currentWindow.id;
+    
+    oldTabsList = tabs.filter(tab => 
       !tab.url.startsWith('chrome://') && 
       !tab.url.startsWith('chrome-extension://') && 
       (currentTime - tab.lastAccessed) > 600000 // 10 minutes in ms
-    ).map(tab => ({ title: tab.title, url: tab.url }));
+    ).map(tab => ({
+      ...tab,
+      originalWindowId: tab.windowId // Remember original window
+    }));
     
-    if (!oldTabs.length) {
-      timer.clear();
-      elements.output.className = "";
+    if (!oldTabsList.length) {
       elements.output.innerHTML = '<p>No tabs have been open for more than 10 minutes.</p>';
       return;
     }
     
-    elements.output.innerText = `Grouping ${oldTabs.length} old tabs...`;
-    
-    const provider = elements.provider.value;
-    const prompt = `Group these browser tabs that have been open for more than 10 minutes into coherent thematic groups. Return the result as markdown with headers for each group and bullet points for the tabs.
-
-Format like this:
-## Work Projects
-- Tab Title 1 - URL1
-- Tab Title 2 - URL2
-
-## Research
-- Tab Title 3 - URL3
-
-Tabs to group:
-${oldTabs.map(tab => `- ${tab.title}: ${tab.url}`).join('\n')}`;
-    
-    let data;
-    if (provider === "claude") {
-      const apiKey = savedApiKey || elements.apiKey.value;
-      if (!apiKey) throw new Error("Please enter your Claude API key");
-      data = await callClaude(oldTabs, apiKey, prompt);
-    } else {
-      data = await callOllama(oldTabs, prompt);
-    }
-    
-    elements.output.className = "";
-    timer.stop(provider);
-    elements.output.innerHTML = data.response ? marked.parse(data.response) : `<p style="color: red;">Error: ${data.error}</p>`;
+    currentTabIndex = 0;
+    await showCurrentTab();
     
   } catch (error) {
-    timer.clear();
-    elements.output.className = "";
     elements.output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
   }
 });
+
+// Show current tab in cycle
+const showCurrentTab = async () => {
+  if (currentTabIndex >= oldTabsList.length) {
+    elements.output.innerHTML = '<p>✅ All old tabs reviewed!</p>';
+    return;
+  }
+  
+  const tab = oldTabsList[currentTabIndex];
+  
+  try {
+    // Move tab to current window
+    if (tab.windowId !== currentWindowId) {
+      await chrome.tabs.move(tab.id, { windowId: currentWindowId, index: -1 });
+    }
+    
+    // Make tab active
+    await chrome.tabs.update(tab.id, { active: true });
+    
+    // Capture screenshot - commented out for now
+    // const screenshot = await chrome.tabs.captureVisibleTab(currentWindow.id, { format: 'png', quality: 50 });
+    
+    elements.output.innerHTML = `
+      <div class="single-tab-view">
+        <h3>Tab ${currentTabIndex + 1} of ${oldTabsList.length}</h3>
+        <p>${tab.title}</p>
+        <div class="tab-cycling-actions">
+          <button class="tab-action-btn keep-btn" data-action="cycle-keep" data-tab-id="${tab.id}">Keep</button>
+          <button class="tab-action-btn close-btn" data-action="cycle-close" data-tab-id="${tab.id}">Delete</button>
+        </div>
+      </div>
+    `;
+    
+    // Add event listeners
+    elements.output.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', handleCyclingAction);
+    });
+    
+  } catch (error) {
+    console.error('Error showing tab:', error);
+    elements.output.innerHTML = `<p style="color: red;">Error showing tab: ${error.message}</p>`;
+  }
+};
+
+// Tab cycling action handler
+const handleCyclingAction = async (event) => {
+  const action = event.target.dataset.action;
+  const tabId = parseInt(event.target.dataset.tabId);
+  
+  switch (action) {
+    case 'cycle-close':
+      try {
+        await chrome.tabs.remove(tabId);
+        // Remove from our list
+        oldTabsList.splice(currentTabIndex, 1);
+        // Don't increment index since we removed current item
+        await showCurrentTab();
+      } catch (error) {
+        console.error('Error closing tab:', error);
+      }
+      break;
+      
+    case 'cycle-keep':
+      try {
+        const tab = oldTabsList[currentTabIndex];
+        // Move tab back to original window if it's different from current
+        if (tab.originalWindowId !== currentWindowId) {
+          await chrome.tabs.move(tab.id, { windowId: tab.originalWindowId, index: -1 });
+        }
+        // Remove from our list (keeping it open)
+        oldTabsList.splice(currentTabIndex, 1);
+        // Don't increment index since we removed current item
+        await showCurrentTab();
+      } catch (error) {
+        console.error('Error moving tab back:', error);
+        // Still remove from list even if move fails
+        oldTabsList.splice(currentTabIndex, 1);
+        await showCurrentTab();
+      }
+      break;
+      
+    case 'skip':
+      currentTabIndex++;
+      await showCurrentTab();
+      break;
+      
+    case 'prev':
+      if (currentTabIndex > 0) {
+        currentTabIndex--;
+        await showCurrentTab();
+      }
+      break;
+      
+    case 'next':
+      if (currentTabIndex < oldTabsList.length - 1) {
+        currentTabIndex++;
+        await showCurrentTab();
+      }
+      break;
+  }
+};
+
+// Legacy tab management event handler (keeping for backward compatibility)
+const handleTabAction = async (event) => {
+  const action = event.target.dataset.action;
+  const tabId = parseInt(event.target.dataset.tabId);
+  const tabCard = event.target.closest('.tab-card');
+  
+  if (action === 'keep') {
+    tabCard.style.opacity = '0.5';
+    tabCard.innerHTML = '<div class="tab-info"><div class="tab-title">✓ Keeping this tab</div></div>';
+    setTimeout(() => tabCard.remove(), 1000);
+  } else if (action === 'close') {
+    try {
+      await chrome.tabs.remove(tabId);
+      tabCard.style.opacity = '0.5';
+      tabCard.innerHTML = '<div class="tab-info"><div class="tab-title">✓ Tab closed</div></div>';
+      setTimeout(() => tabCard.remove(), 1000);
+    } catch (error) {
+      console.error('Error closing tab:', error);
+      tabCard.innerHTML = '<div class="tab-info"><div class="tab-title" style="color: red;">✗ Error closing tab</div></div>';
+    }
+  }
+};
 
 // Main classification function
 elements.classify.addEventListener("click", async () => {
