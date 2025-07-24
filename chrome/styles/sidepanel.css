@@ -38,3 +38,47 @@
       opacity: 0.6;
       font-style: italic;
     }
+
+    /* Markdown styling */
+    #output h1, #output h2, #output h3 {
+      color: #333;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    #output h2 {
+      border-bottom: 2px solid #4285f4;
+      padding-bottom: 5px;
+    }
+
+    #output ul {
+      padding-left: 20px;
+    }
+
+    #output li {
+      margin-bottom: 5px;
+      line-height: 1.4;
+    }
+
+    #output a {
+      color: #4285f4;
+      text-decoration: none;
+    }
+
+    #output a:hover {
+      text-decoration: underline;
+    }
+
+    #output code {
+      background: #f1f3f4;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+
+    #output pre {
+      background: #f1f3f4;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
