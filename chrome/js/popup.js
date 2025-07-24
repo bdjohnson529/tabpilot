@@ -1,68 +1,66 @@
 console.log("TabPilot sidepanel loaded!")
 
+// DOM elements
+const elements = {
+  provider: document.getElementById("provider"),
+  apiKeySection: document.getElementById("apiKeySection"),
+  apiKeyStatus: document.getElementById("apiKeyStatus"),
+  apiKeyInput: document.getElementById("apiKeyInput"),
+  apiKey: document.getElementById("apiKey"),
+  changeApiKey: document.getElementById("changeApiKey"),
+  classify: document.getElementById("classify"),
+  timer: document.getElementById("timer"),
+  output: document.getElementById("output")
+};
+
 let savedApiKey = null;
 
-// Handle provider selection
-document.getElementById("provider").addEventListener("change", (e) => {
-  const apiKeySection = document.getElementById("apiKeySection");
-  if (e.target.value === "claude") {
-    apiKeySection.style.display = "block";
-    updateApiKeyDisplay();
-  } else {
-    apiKeySection.style.display = "none";
-  }
-});
+// Utility functions
+const show = (el) => el.style.display = "block";
+const hide = (el) => el.style.display = "none";
+const showFlex = (el) => el.style.display = "flex";
 
-// Update API key display based on whether one is saved
+// API key management
 function updateApiKeyDisplay() {
-  const apiKeyStatus = document.getElementById("apiKeyStatus");
-  const apiKeyInput = document.getElementById("apiKeyInput");
-  
-  if (savedApiKey) {
-    apiKeyStatus.style.display = "flex";
-    apiKeyInput.style.display = "none";
-  } else {
-    apiKeyStatus.style.display = "none";
-    apiKeyInput.style.display = "block";
-  }
+  savedApiKey ? (showFlex(elements.apiKeyStatus), hide(elements.apiKeyInput)) 
+              : (hide(elements.apiKeyStatus), show(elements.apiKeyInput));
 }
 
 // Load saved API key
 chrome.storage.local.get(['claudeApiKey'], (result) => {
   if (result.claudeApiKey) {
     savedApiKey = result.claudeApiKey;
-    document.getElementById("apiKey").value = result.claudeApiKey;
+    elements.apiKey.value = result.claudeApiKey;
   }
   updateApiKeyDisplay();
 });
 
-// Save API key when changed
-document.getElementById("apiKey").addEventListener("input", (e) => {
-  const newKey = e.target.value;
-  if (newKey) {
-    chrome.storage.local.set({ claudeApiKey: newKey });
-    savedApiKey = newKey;
+// Event listeners
+elements.provider.addEventListener("change", (e) => {
+  if (e.target.value === "claude") {
+    show(elements.apiKeySection);
+    updateApiKeyDisplay();
+  } else {
+    hide(elements.apiKeySection);
+  }
+});
+
+elements.apiKey.addEventListener("input", (e) => {
+  if (e.target.value) {
+    chrome.storage.local.set({ claudeApiKey: e.target.value });
+    savedApiKey = e.target.value;
     updateApiKeyDisplay();
   }
 });
 
-// Handle change API key button
-document.getElementById("changeApiKey").addEventListener("click", () => {
-  const apiKeyStatus = document.getElementById("apiKeyStatus");
-  const apiKeyInput = document.getElementById("apiKeyInput");
-  
-  apiKeyStatus.style.display = "none";
-  apiKeyInput.style.display = "block";
-  document.getElementById("apiKey").focus();
+elements.changeApiKey.addEventListener("click", () => {
+  hide(elements.apiKeyStatus);
+  show(elements.apiKeyInput);
+  elements.apiKey.focus();
 });
 
-async function callOllama(tabData) {
-  const response = await fetch("http://localhost:5001/api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "gemma3",
-      prompt: `Classify these browser tabs into categories (Work, Social, News, Docs, Shopping, Entertainment). 
+// Shared prompt template
+const createPrompt = (tabData) => `Classify these browser tabs into categories (Work, Social, News, Docs, Shopping, Entertainment). 
 Return the result as markdown with headers for each category and bullet points for the tabs.
 
 Format like this:
@@ -74,14 +72,23 @@ Format like this:
 - Tab Title 3 - URL3
 
 Tabs to classify:
-${tabData.map(tab => `- ${tab.title}: ${tab.url}`).join('\n')}`,
+${tabData.map(tab => `- ${tab.title}: ${tab.url}`).join('\n')}`;
+
+// API calls
+const callOllama = async (tabData) => {
+  const response = await fetch("http://localhost:5001/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gemma3",
+      prompt: createPrompt(tabData),
       stream: false
     })
   });
   return await response.json();
-}
+};
 
-async function callClaude(tabData, apiKey) {
+const callClaude = async (tabData, apiKey) => {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -93,113 +100,79 @@ async function callClaude(tabData, apiKey) {
     body: JSON.stringify({
       model: "claude-3-5-sonnet-20241022",
       max_tokens: 4000,
-      messages: [{
-        role: "user",
-        content: `Classify these browser tabs into categories (Work, Social, News, Docs, Shopping, Entertainment). 
-Return the result as markdown with headers for each category and bullet points for the tabs.
-
-Format like this:
-## Work
-- Tab Title 1 - URL1
-- Tab Title 2 - URL2
-
-## Social  
-- Tab Title 3 - URL3
-
-Tabs to classify:
-${tabData.map(tab => `- ${tab.title}: ${tab.url}`).join('\n')}`
-      }]
+      messages: [{ role: "user", content: createPrompt(tabData) }]
     })
   });
   
   const data = await response.json();
-  if (data.content && data.content[0]) {
-    return { response: data.content[0].text };
-  } else {
-    throw new Error(data.error?.message || "Unknown error from Claude API");
-  }
-}
+  if (data.content?.[0]) return { response: data.content[0].text };
+  throw new Error(data.error?.message || "Unknown error from Claude API");
+};
 
-document.getElementById("classify").addEventListener("click", async () => {
-  const outputElement = document.getElementById("output");
-  const timerElement = document.getElementById("timer");
+// Timer management
+const createTimer = (startTime) => {
+  let interval;
+  const start = () => {
+    show(elements.timer);
+    interval = setInterval(() => {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      elements.timer.innerHTML = `<span class="timer-text">${elapsed}s elapsed...</span>`;
+    }, 100);
+  };
+  
+  const stop = (provider) => {
+    clearInterval(interval);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    elements.timer.innerHTML = `<span class="timer-text">Completed in ${elapsed}s using ${provider === "claude" ? "Claude API" : "Ollama"}</span>`;
+  };
+  
+  const clear = () => {
+    clearInterval(interval);
+    hide(elements.timer);
+  };
+  
+  return { start, stop, clear };
+};
+
+// Main classification function
+elements.classify.addEventListener("click", async () => {
   const startTime = Date.now();
-  let timerInterval;
+  const timer = createTimer(startTime);
   
-  // Show loading state
-  outputElement.innerText = "Analyzing all tabs...";
-  outputElement.className = "loading";
-  timerElement.style.display = "block";
-  
-  // Start continuous timer
-  timerInterval = setInterval(() => {
-    const currentTime = Date.now();
-    const elapsedTime = ((currentTime - startTime) / 1000).toFixed(1);
-    timerElement.innerHTML = `<span class="timer-text">${elapsedTime}s elapsed...</span>`;
-  }, 100); // Update every 100ms
+  // Set loading state
+  elements.output.innerText = "Analyzing all tabs...";
+  elements.output.className = "loading";
+  timer.start();
   
   try {
-    // Get all tabs
+    // Get and filter tabs
     const tabs = await chrome.tabs.query({});
-    const tabData = tabs.map(tab => ({
-      title: tab.title,
-      url: tab.url
-    }));
+    const regularTabs = tabs
+      .map(tab => ({ title: tab.title, url: tab.url }))
+      .filter(tab => !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://'));
 
-    // Filter out chrome:// URLs
-    const regularTabs = tabData.filter(tab => 
-      !tab.url.startsWith('chrome://') && 
-      !tab.url.startsWith('chrome-extension://')
-    );
+    elements.output.innerText = `Found ${regularTabs.length} tabs to analyze...`;
 
-    console.log("Tab data:", regularTabs);
-    
-    outputElement.innerText = `Found ${regularTabs.length} tabs to analyze...`;
-
-    // Get selected provider
-    const provider = document.getElementById("provider").value;
+    // Call appropriate API
+    const provider = elements.provider.value;
     let data;
-
+    
     if (provider === "claude") {
-      const apiKey = savedApiKey || document.getElementById("apiKey").value;
-      if (!apiKey) {
-        throw new Error("Please enter your Claude API key");
-      }
+      const apiKey = savedApiKey || elements.apiKey.value;
+      if (!apiKey) throw new Error("Please enter your Claude API key");
       data = await callClaude(regularTabs, apiKey);
     } else {
       data = await callOllama(regularTabs);
     }
-    
-    // Stop continuous timer
-    clearInterval(timerInterval);
-    
-    // Calculate elapsed time
-    const endTime = Date.now();
-    const elapsedTime = ((endTime - startTime) / 1000).toFixed(2);
-    
-    console.log("Classification result:", data);
 
-    // Remove loading state and show results
-    outputElement.className = "";
-    
-    // Show final timer
-    timerElement.innerHTML = `<span class="timer-text">Completed in ${elapsedTime}s using ${provider === "claude" ? "Claude API" : "Ollama"}</span>`;
-    timerElement.style.display = "block";
-    
-    // Render as markdown
-    if (data.response) {
-      outputElement.innerHTML = marked.parse(data.response);
-    } else {
-      outputElement.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
-    }
+    // Show results
+    elements.output.className = "";
+    timer.stop(provider);
+    elements.output.innerHTML = data.response ? marked.parse(data.response) : `<p style="color: red;">Error: ${data.error}</p>`;
 
   } catch (error) {
-    // Stop continuous timer
-    clearInterval(timerInterval);
-    
-    console.error("Error:", error);
-    outputElement.className = "";
-    timerElement.style.display = "none";
-    outputElement.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+    timer.clear();
+    elements.output.className = "";
+    elements.output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
   }
 });
