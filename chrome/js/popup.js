@@ -147,11 +147,20 @@ elements.classify.addEventListener("click", async () => {
   try {
     // Get and filter tabs
     const tabs = await chrome.tabs.query({});
+    const currentTime = Date.now();
     const regularTabs = tabs
-      .map(tab => ({ title: tab.title, url: tab.url }))
-      .filter(tab => !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://'));
+      .map(tab => ({ 
+        title: tab.title, 
+        url: tab.url, 
+        lastAccessed: tab.lastAccessed,
+        timeSinceAccessed: (currentTime - tab.lastAccessed) / 1000
+      }))
+      .filter(tab => !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://'))
+      .sort((a, b) => b.timeSinceAccessed - a.timeSinceAccessed);
 
     elements.output.innerText = `Found ${regularTabs.length} tabs to analyze...`;
+
+    console.log(regularTabs);
 
     // Call appropriate API
     const provider = elements.provider.value;
