@@ -82,3 +82,44 @@
       border-radius: 5px;
       overflow-x: auto;
     }
+
+    /* Provider selection styling */
+    .provider-selection {
+      margin-bottom: 16px;
+    }
+
+    .provider-selection label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .provider-selection select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+    }
+
+    .api-key-section {
+      margin-bottom: 16px;
+    }
+
+    .api-key-section label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .api-key-section input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }

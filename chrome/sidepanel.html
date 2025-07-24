@@ -8,6 +8,17 @@
 <body>
   <div class="container">
     <h2>TabPilot AI</h2>
+    <div class="provider-selection">
+      <label for="provider">AI Provider:</label>
+      <select id="provider">
+        <option value="ollama">Ollama (Local)</option>
+        <option value="claude">Claude API</option>
+      </select>
+    </div>
+    <div class="api-key-section" id="apiKeySection" style="display: none;">
+      <label for="apiKey">Claude API Key:</label>
+      <input type="password" id="apiKey" placeholder="Enter your Claude API key">
+    </div>
     <button id="classify">Classify All Tabs</button>
     <div id="output">Click the button to analyze your tabs...</div>
   </div>

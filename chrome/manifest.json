@@ -6,11 +6,11 @@
   "action": {
     "default_title": "Open TabPilot Side Panel"
   },
-  "permissions": ["tabs", "scripting", "activeTab", "sidePanel"],
+  "permissions": ["tabs", "scripting", "activeTab", "sidePanel", "storage"],
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "host_permissions": ["http://localhost:5001/*"],
+  "host_permissions": ["http://localhost:5001/*", "https://api.anthropic.com/*"],
   "background": {
     "service_worker": "js/background.js"
   }
